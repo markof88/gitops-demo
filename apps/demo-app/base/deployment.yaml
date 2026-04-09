@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: demo-app
 spec:
-  replicas: 2
+  replicas: 7
   selector:
     matchLabels:
       app: demo
@@ -23,3 +23,8 @@ spec:
             secretKeyRef:
               name: demo-secret
               key: message
+        - name: TEAM_MESSAGE
+          valueFrom:
+            secretKeyRef:
+              name: demo-secret
+              key: team-message
