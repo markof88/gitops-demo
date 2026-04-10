@@ -1,10 +1,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
-  name: caralegal-dev
+  name: caralegal-prod
   namespace: argocd
 spec:
-  description: Caralegal dev environment
+  description: Caralegal prod environment
   sourceRepos:
     - 'https://github.com/markof88/gitops-demo'
   destinations:

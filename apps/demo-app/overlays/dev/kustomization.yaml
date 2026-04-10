@@ -1,3 +1,11 @@
 resources:
   - ../../base
   - sealed-secret.yaml
+
+patches:
+  - path: replica-patch.yaml
+
+images:
+  - name: demo-app
+    newName: ghcr.io/markof88/gitops-demo/demo-app
+    newTag: latest
