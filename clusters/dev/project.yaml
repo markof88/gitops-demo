@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: caralegal-dev
+  namespace: argocd
+spec:
+  description: Caralegal dev environment
+  sourceRepos:
+    - 'https://github.com/markof88/gitops-demo'
+  destinations:
+    - server: 'https://kubernetes.default.svc'
+      namespace: demo
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: 'apps'
+      kind: Deployment
+    - group: ''
+      kind: Service
+    - group: ''
+      kind: Secret
+    - group: bitnami.com
+      kind: SealedSecret
