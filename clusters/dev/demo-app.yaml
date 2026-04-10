@@ -6,7 +6,7 @@ metadata:
 spec:
   destination:
     server: 'https://kubernetes.default.svc'
-    namespace: default
+    namespace: demo
   source:
     repoURL: 'https://github.com/markof88/gitops-demo'
     targetRevision: HEAD
@@ -15,3 +15,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
