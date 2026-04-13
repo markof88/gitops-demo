@@ -49,5 +49,8 @@ spec:
             SELECT 'Hello from GitOps!', 'Deployed by ArgoCD'
             WHERE NOT EXISTS (SELECT 1 FROM messages LIMIT 1);"
 
+          echo "004: add deployment_source column (backward-compatible)..."
+          psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS deployment_source TEXT DEFAULT 'argocd';"
+
           echo "All migrations completed successfully."
       restartPolicy: Never
