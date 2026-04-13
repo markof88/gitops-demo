@@ -34,19 +34,20 @@ spec:
             sleep 2
           done
 
-          echo "Running migrations..."
-          for f in $(ls /migrations/*.sql | sort); do
-            echo "Applying $f..."
-            psql -f $f
-            echo "Done: $f"
-          done
+          echo "001: create messages table..."
+          psql -c "CREATE TABLE IF NOT EXISTS messages (
+            id         SERIAL PRIMARY KEY,
+            message    TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+          );"
+
+          echo "002: add team_message column (backward-compatible)..."
+          psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS team_message TEXT;"
+
+          echo "003: seed initial data if empty..."
+          psql -c "INSERT INTO messages (message, team_message)
+            SELECT 'Hello from GitOps!', 'Deployed by ArgoCD'
+            WHERE NOT EXISTS (SELECT 1 FROM messages LIMIT 1);"
 
           echo "All migrations completed successfully."
-        volumeMounts:
-        - name: migrations
-          mountPath: /migrations
       restartPolicy: Never
-      volumes:
-      - name: migrations
-        configMap:
-          name: migrations
