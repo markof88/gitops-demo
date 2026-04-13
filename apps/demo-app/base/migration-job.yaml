@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: demo-app-migration
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      containers:
+      - name: migrate
+        image: postgres:15-alpine
+        env:
+        - name: PGHOST
+          value: postgres
+        - name: PGUSER
+          value: demo
+        - name: PGDATABASE
+          value: demo
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: password
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for postgres to be ready..."
+          until pg_isready -h $PGHOST -U $PGUSER; do
+            sleep 2
+          done
+
+          echo "Running migrations..."
+          for f in $(ls /migrations/*.sql | sort); do
+            echo "Applying $f..."
+            psql -f $f
+            echo "Done: $f"
+          done
+
+          echo "All migrations completed successfully."
+        volumeMounts:
+        - name: migrations
+          mountPath: /migrations
+      restartPolicy: Never
+      volumes:
+      - name: migrations
+        configMap:
+          name: migrations

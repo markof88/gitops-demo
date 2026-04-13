@@ -20,6 +20,12 @@ spec:
       kind: Service
     - group: ''
       kind: Secret
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: PersistentVolumeClaim
+    - group: batch
+      kind: Job
     - group: bitnami.com
       kind: SealedSecret
     - group: policy
