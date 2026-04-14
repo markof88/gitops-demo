@@ -3,4 +3,5 @@ resources:
 - service.yaml
 - pdb.yaml
 - postgres.yaml
+- db-bootstrap-job.yaml
 - migration-job.yaml

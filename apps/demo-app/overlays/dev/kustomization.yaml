@@ -2,6 +2,7 @@ resources:
 - ../../base
 - sealed-secret.yaml
 - postgres-secret.yaml
+- app-db-sealed-secret.yaml
 
 patches:
 - path: replica-patch.yaml

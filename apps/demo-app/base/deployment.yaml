@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: demo-app
   annotations:
-    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-wave: "4"
 spec:
   replicas: 2
   selector:

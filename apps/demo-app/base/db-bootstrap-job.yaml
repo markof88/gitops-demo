@@ -1,0 +1,69 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: demo-app-db-bootstrap
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      containers:
+      - name: bootstrap
+        image: postgres:15-alpine
+        env:
+        - name: PGHOST
+          value: postgres
+        - name: PGUSER
+          value: demo
+        - name: PGDATABASE
+          value: demo
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: password
+        - name: APP_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: app-db-secret
+              key: username
+        - name: APP_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-db-secret
+              key: password
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for postgres to be ready..."
+          until pg_isready -h $PGHOST -U $PGUSER; do
+            sleep 2
+          done
+
+          echo "Creating application-scoped user '$APP_DB_USER'..."
+          psql -c "DO \$\$
+          BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$APP_DB_USER') THEN
+              CREATE USER $APP_DB_USER WITH PASSWORD '$APP_DB_PASSWORD';
+            END IF;
+          END
+          \$\$;"
+
+          echo "Granting connect on database..."
+          psql -c "GRANT CONNECT ON DATABASE demo TO $APP_DB_USER;"
+
+          echo "Granting schema usage..."
+          psql -c "GRANT USAGE ON SCHEMA public TO $APP_DB_USER;"
+
+          echo "Granting table-level privileges..."
+          psql -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO $APP_DB_USER;"
+
+          echo "Setting default privileges for future tables..."
+          psql -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO $APP_DB_USER;"
+
+          echo "Bootstrap complete. '$APP_DB_USER' has application-scoped access only."
+      restartPolicy: Never

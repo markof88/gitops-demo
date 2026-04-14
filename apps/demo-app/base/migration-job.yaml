@@ -5,7 +5,7 @@ metadata:
   annotations:
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-wave: "3"
 spec:
   backoffLimit: 3
   template:
@@ -16,14 +16,17 @@ spec:
         env:
         - name: PGHOST
           value: postgres
-        - name: PGUSER
-          value: demo
         - name: PGDATABASE
           value: demo
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: app-db-secret
+              key: username
         - name: PGPASSWORD
           valueFrom:
             secretKeyRef:
-              name: postgres-secret
+              name: app-db-secret
               key: password
         command:
         - sh
