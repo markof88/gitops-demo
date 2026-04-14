@@ -59,11 +59,12 @@ spec:
           echo "Granting schema usage..."
           psql -c "GRANT USAGE ON SCHEMA public TO $APP_DB_USER;"
 
-          echo "Granting table-level privileges..."
-          psql -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO $APP_DB_USER;"
+          echo "Granting create on schema (app user will own its tables)..."
+          psql -c "GRANT CREATE ON SCHEMA public TO $APP_DB_USER;"
 
-          echo "Setting default privileges for future tables..."
-          psql -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO $APP_DB_USER;"
+          echo "Transferring ownership of existing tables to '$APP_DB_USER'..."
+          psql -t -c "SELECT tablename FROM pg_tables WHERE schemaname = 'public';" \
+            | xargs -I{} psql -c "ALTER TABLE {} OWNER TO $APP_DB_USER;"
 
-          echo "Bootstrap complete. '$APP_DB_USER' has application-scoped access only."
+          echo "Bootstrap complete. '$APP_DB_USER' owns all tables in public schema."
       restartPolicy: Never
