@@ -30,3 +30,5 @@ spec:
       kind: SealedSecret
     - group: policy
       kind: PodDisruptionBudget
+    - group: networking.k8s.io
+      kind: NetworkPolicy
