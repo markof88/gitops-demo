@@ -52,6 +52,7 @@ argocd version --client
 kubeseal --version
 op --version
 psql --version
+gh --version
 
 # Verify cluster is up
 kubectl get nodes
@@ -59,6 +60,10 @@ kubectl get nodes
 # Start ArgoCD UI port-forward (keep this terminal open)
 kubectl port-forward svc/argocd-server -n argocd 8080:80
 # UI: http://localhost:8080
+
+# Login to ArgoCD CLI
+argocd login localhost:8080 --insecure --username admin \
+  --password "$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)"
 ```
 
 ---
@@ -70,11 +75,13 @@ everything — ArgoCD creates the AppProject, the Application, and syncs the ful
 with the correct wave order.
 
 ```bash
-# Clean slate — delete the running app and namespace
+# Clean slate — delete everything
+kubectl delete application root-app -n argocd --ignore-not-found
+kubectl delete application demo-app -n argocd --ignore-not-found
 kubectl delete namespace demo --ignore-not-found
-argocd app delete demo-app --yes 2>/dev/null || true
 
 # Confirm nothing is running
+kubectl get applications -n argocd
 kubectl get all -n demo 2>&1
 
 # The entire desired state is already in Git.
@@ -121,24 +128,24 @@ The only file written to disk is the encrypted SealedSecret — safe to commit t
 eval $(op signin)
 
 # Fetch the cluster's Sealed Secrets public cert (safe to share — it's a public key)
-kubeseal --controller-namespace kube-system --fetch-cert > dev-pub.pem
+kubeseal --controller-name sealed-secrets --controller-namespace kube-system --fetch-cert > ./dev-pub.pem
 
 # Seal demo-secret (app message + team message)
 kubectl create secret generic demo-secret \
   -n demo \
-  --from-literal=message="$(op read 'op://Private/demo-secret/message')" \
-  --from-literal=team-message="$(op read 'op://Private/demo-secret/team-message')" \
+  --from-literal=message="$(op read 'op://gitops-demo/demo-secret/message')" \
+  --from-literal=team-message="$(op read 'op://gitops-demo/demo-secret/team-message')" \
   --dry-run=client -o yaml \
-  | kubeseal --cert dev-pub.pem --format yaml \
+  | kubeseal --controller-name sealed-secrets --controller-namespace kube-system --cert ./dev-pub.pem --format yaml \
   > apps/demo-app/overlays/dev/sealed-secret.yaml
 
 # Seal app-db-secret (app-scoped DB credentials)
 kubectl create secret generic app-db-secret \
   -n demo \
-  --from-literal=username="$(op read 'op://Private/app-db-secret/username')" \
-  --from-literal=password="$(op read 'op://Private/app-db-secret/password')" \
+  --from-literal=username="demo_app" \
+  --from-literal=password="$(op read 'op://gitops-demo/demo-app-db/password')" \
   --dry-run=client -o yaml \
-  | kubeseal --cert dev-pub.pem --format yaml \
+  | kubeseal --controller-name sealed-secrets --controller-namespace kube-system --cert ./dev-pub.pem --format yaml \
   > apps/demo-app/overlays/dev/app-db-sealed-secret.yaml
 
 # Show the file — only encrypted gibberish, no plaintext
@@ -230,11 +237,11 @@ If the migration fails, the app does not deploy.
 # Find the line: echo "All migrations completed successfully."
 # Insert before it:
 #
-#          echo "005: add demo_version column..."
-#          psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS demo_version TEXT DEFAULT 'v1';"
+#          echo "006: add presented_at column..."
+#          psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS presented_at TIMESTAMP DEFAULT NOW();"
 
 git add apps/demo-app/base/migration-job.yaml
-git commit -m "feat: add demo_version column (migration 005)"
+git commit -m "feat: add presented_at column (migration 006)"
 git push origin main
 
 # Watch the waves execute in order
@@ -256,12 +263,14 @@ psql -h localhost -U demo -d demo -c "SELECT * FROM messages;"
 commits the new tag back to Git, ArgoCD detects the tag change and rolls out new pods.
 
 ```bash
-# Change the app (bump version)
-sed -i '' 's/GitOps Demo — v[0-9]*/GitOps Demo — v5/' app/index.html
-grep "v5" app/index.html
+# Change the app (bump to next version — check current first)
+grep "GitOps Demo" app/index.html
+
+sed -i '' 's/GitOps Demo — v[0-9]*/GitOps Demo — v6/' app/index.html
+grep "v6" app/index.html
 
 git add app/index.html
-git commit -m "feat: bump demo to v5"
+git commit -m "feat: bump demo to v6"
 git push origin main
 
 # Watch GitHub Actions build and push the image
