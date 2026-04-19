@@ -64,7 +64,7 @@ spec:
 
           echo "Transferring ownership of existing tables to '$APP_DB_USER'..."
           psql -t -c "SELECT tablename FROM pg_tables WHERE schemaname = 'public';" \
-            | xargs -I{} psql -c "ALTER TABLE {} OWNER TO $APP_DB_USER;"
+            | xargs -I{} psql -c "ALTER TABLE {} OWNER TO \"$APP_DB_USER\";"
 
           echo "Bootstrap complete. '$APP_DB_USER' owns all tables in public schema."
       restartPolicy: Never
