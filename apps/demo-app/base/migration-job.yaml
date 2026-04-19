@@ -55,5 +55,8 @@ spec:
           echo "004: add deployment_source column (backward-compatible)..."
           psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS deployment_source TEXT DEFAULT 'argocd';"
 
+          echo "005: add demo_version column..."
+          psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS demo_version TEXT DEFAULT 'v1';"
+
           echo "All migrations completed successfully."
       restartPolicy: Never
