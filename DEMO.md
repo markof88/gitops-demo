@@ -4,6 +4,129 @@ Run sections top to bottom. Each section starts with what it shows, then the com
 
 ---
 
+## What Is This Demo
+
+This demo shows a GitOps workflow built on top of ArgoCD, Kustomize, GitHub Actions, and SealedSecrets. The goal is to prove that the entire lifecycle of an application — deployment, secrets, database schema, permissions — can be managed declaratively from Git, with no manual steps on the cluster after the initial bootstrap.
+
+The demo application is a simple NGINX web app backed by a PostgreSQL database. It is intentionally minimal so the focus stays on the infrastructure patterns, not the application code.
+
+---
+
+## The Application
+
+The app (`app/`) is a single NGINX container serving a static HTML page. It reads two environment variables injected from a Kubernetes Secret:
+- `SECRET_MESSAGE` — a message pulled from 1Password
+- `TEAM_MESSAGE` — a second message pulled from 1Password
+
+It connects to a PostgreSQL database and the page displays data seeded by the migration job.
+
+---
+
+## Kustomize — Managing Multiple Environments
+
+**What it is:** Kustomize is a Kubernetes-native configuration management tool. Instead of templating (like Helm), it works by layering patches on top of a base configuration. There are no variables or conditionals — just plain YAML with overrides applied per environment.
+
+**How we use it:**
+```
+apps/demo-app/
+  base/                  → shared resources: Deployment, Service, Postgres, Jobs, PDB, NetworkPolicy
+  overlays/
+    dev/                 → dev-specific: 2 replicas, lower resource limits, sealed secrets, image tag
+    stage/               → stage-specific: 2 replicas, sealed secrets
+    prod/                → prod-specific: 3 replicas, higher resource limits, no auto self-heal
+```
+
+Each overlay references the base and applies patches on top. The image tag is the only thing that changes on every deploy — CI writes the new SHA directly into `overlays/dev/kustomization.yaml` and commits it back to Git.
+
+**Environment differences:**
+
+| Setting | dev | stage | prod |
+|---------|-----|-------|------|
+| Replicas | 2 | 2 | 3 |
+| CPU request | 50m | 50m | 100m |
+| RAM limit | 128Mi | 128Mi | 256Mi |
+| ArgoCD self-heal | yes | yes | no |
+
+---
+
+## ArgoCD — GitOps Controller
+
+**What it is:** ArgoCD continuously watches a Git repository and ensures the cluster state matches what is in Git. If someone manually changes something on the cluster, ArgoCD reverts it. If Git changes, ArgoCD applies the change.
+
+**Key concepts used:**
+
+- **Application** — tells ArgoCD which repo path to watch and which cluster/namespace to deploy into
+- **AppProject** — defines what ArgoCD is allowed to manage: which repos, namespaces, and resource types are permitted. Acts as a security boundary.
+- **App of Apps (root-app)** — an ArgoCD Application that watches `clusters/dev/` and manages the AppProject and the demo-app Application themselves. This means even ArgoCD's own configuration is in Git and self-managed.
+
+**Repo structure:**
+```
+clusters/dev/
+  project.yaml      → AppProject: permissions boundary for ArgoCD
+  demo-app.yaml     → Application: what to sync and where
+bootstrap/
+  root-app.yaml     → App of Apps: manages everything above (applied once manually to bootstrap)
+```
+
+---
+
+## Sync Waves — Ordered Deployment
+
+**The problem:** PostgreSQL must be running before the migration job can connect. The migration job must complete before the app starts. Kubernetes does not guarantee deployment order on its own.
+
+**The solution:** ArgoCD sync waves. Every resource is annotated with a wave number. ArgoCD deploys wave N and waits for all resources in that wave to be healthy before proceeding to wave N+1.
+
+| Wave | Resource | Why it runs here |
+|------|----------|-----------------|
+| 0 | Secrets, Services | Must exist before anything else references them |
+| 1 | Postgres Deployment | Database must be up and ready |
+| 2 | db-bootstrap Job | Creates app-scoped DB user — needs postgres running |
+| 3 | Migration Job | Runs schema migrations — needs postgres + the app user |
+| 4 | demo-app Deployment | Application starts only after DB is fully ready |
+
+If any wave fails, ArgoCD stops and does not proceed. The app never starts with an unprepared database.
+
+---
+
+## SealedSecrets — Secrets in Git
+
+**The problem:** Kubernetes Secrets are base64-encoded, not encrypted. You cannot commit them to a Git repository safely.
+
+**The solution:** SealedSecrets. A controller running in the cluster holds a private key. You encrypt secrets with the corresponding public key using `kubeseal` — the result is a `SealedSecret` that only this specific cluster can decrypt. The encrypted file is safe to commit to a public repo.
+
+**Our workflow:**
+1. Secret values live in 1Password
+2. `op read` fetches the value live from 1Password — never written to a file
+3. The value is piped directly into `kubeseal` which encrypts it
+4. The encrypted `SealedSecret` is committed to Git
+5. ArgoCD applies it to the cluster → the SealedSecrets controller decrypts it → a standard Kubernetes Secret is created
+
+Plaintext never touches disk at any point.
+
+**Secrets in this demo:**
+- `demo-secret` — app messages (`message`, `team-message`) — sourced from 1Password vault `gitops-demo`
+- `app-db-secret` — application DB credentials (`username`, `password`) — sourced from 1Password vault `gitops-demo`
+- `postgres-secret` — DB superuser password — plaintext in dev, SealedSecret in stage/prod
+
+---
+
+## CI/CD Pipeline
+
+**CI (GitHub Actions):** triggered on any push to `main` that touches `app/**`
+1. Builds a multi-architecture Docker image (linux/amd64 + linux/arm64 — needed because development is on Apple Silicon but production runs on amd64)
+2. Pushes the image to GitHub Container Registry (`ghcr.io`)
+3. Updates the image tag in `apps/demo-app/overlays/dev/kustomization.yaml` with the new commit SHA
+4. Commits the tag change back to `main`
+
+**CD (ArgoCD):** triggered by the CI commit
+1. ArgoCD detects the new image tag in Git
+2. Runs the full sync wave sequence
+3. Rolls out new pods with the updated image
+
+There is no direct connection between CI and ArgoCD. CI writes to Git. ArgoCD reads from Git. Git is the single source of truth.
+
+---
+
 ## Architecture Overview (no commands — explain verbally)
 
 **What is built:**
