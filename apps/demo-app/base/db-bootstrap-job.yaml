@@ -48,7 +48,9 @@ spec:
           psql -c "DO \$\$
           BEGIN
             IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$APP_DB_USER') THEN
-              CREATE USER $APP_DB_USER WITH PASSWORD '$APP_DB_PASSWORD';
+              CREATE USER \"$APP_DB_USER\" WITH PASSWORD '$APP_DB_PASSWORD';
+            ELSE
+              ALTER USER \"$APP_DB_USER\" WITH PASSWORD '$APP_DB_PASSWORD';
             END IF;
           END
           \$\$;"
