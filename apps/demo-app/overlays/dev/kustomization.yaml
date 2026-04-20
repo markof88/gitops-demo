@@ -10,6 +10,6 @@ patches:
 images:
 - name: demo-app
   newName: ghcr.io/markof88/gitops-demo/demo-app
-  newTag: 99ee84f0b03a590f4357ef360947466d168149c9
+  newTag: 378ccb4eac2af65cdb7d5e124ed183b4e8505821
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
