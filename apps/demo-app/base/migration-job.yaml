@@ -58,5 +58,8 @@ spec:
           echo "005: add demo_version column..."
           psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS demo_version TEXT DEFAULT 'v1';"
 
+          echo "006: add presented_at column..."
+          psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS presented_at TIMESTAMP DEFAULT NOW();"
+
           echo "All migrations completed successfully."
       restartPolicy: Never
