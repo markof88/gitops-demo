@@ -1,18 +1,16 @@
-# GitOps Demo — Presentation Script
-
-Run sections top to bottom. Each section starts with what it shows, then the commands.
+# GitOps Demo
 
 ---
 
 ## What Is This Demo
 
-This demo shows a GitOps workflow built on ArgoCD, Kustomize, GitHub Actions, and SealedSecrets. The goal is to prove that the entire lifecycle of an application — deployment, secrets, database schema, permissions — can be managed declaratively from Git, with no manual steps on the cluster after the initial bootstrap.
+This demo shows a GitOps workflow built on ArgoCD, Kustomize, GitHub Actions, and SealedSecrets. The goal is to prove that the entire lifecycle of an application, deployment, secrets, database schema, permissions, can be managed declaratively from Git, with no manual steps on the cluster after the initial bootstrap.
 
 The demo application is a simple NGINX web app backed by a PostgreSQL database. It is intentionally minimal so the focus stays on the infrastructure patterns, not the application code.
 
 ---
 
-## Repository Structure — Top Level
+## Repository Structure, Top Level
 
 ```
 gitops-demo/
@@ -27,7 +25,7 @@ These four directories represent four completely separate concerns. Understandin
 
 ---
 
-## `app/` — The Application Source Code
+## `app/` The Application Source Code
 
 ```
 app/
@@ -41,13 +39,13 @@ FROM nginx:1.25-alpine
 COPY index.html /usr/share/nginx/html/index.html
 ```
 
-That is the entire application. One HTML file served by NGINX. It is intentionally trivial — the interesting part is everything around it, not the app itself.
+That is the entire application. One HTML file served by NGINX. It is intentionally trivial, the interesting part is everything around it, not the app itself.
 
-**What triggers a build:** GitHub Actions watches for any push to `main` that touches the `app/**` path. If you change `index.html` and push, a new Docker image is built. If you change something in `apps/` or `clusters/`, the CI pipeline does not run at all — there is nothing to build.
+**What triggers a build:** GitHub Actions watches for any push to `main` that touches the `app/**` path. If you change `index.html` and push, a new Docker image is built. If you change something in `apps/` or `clusters/`, the CI pipeline does not run at all. there is nothing to build.
 
 ---
 
-## `.github/workflows/` — The CI Pipeline
+## `.github/workflows/`, The CI Pipeline
 
 File: `.github/workflows/build.yml`
 
@@ -55,23 +53,23 @@ File: `.github/workflows/build.yml`
 
 **What it does, step by step:**
 
-1. **Builds a multi-architecture image** — `linux/amd64` and `linux/arm64`. Both architectures are needed because development happens on Apple Silicon (arm64) but the cluster runs on amd64. Without multi-arch, the image would not run on GitHub Actions or in production.
+1. **Builds a multi-architecture image** `linux/amd64` and `linux/arm64`. Both architectures are needed because development happens on Apple Silicon (arm64) but the cluster runs on amd64. Without multi-arch, the image would not run on GitHub Actions or in production.
 
-2. **Pushes to GitHub Container Registry** — the image is tagged with two tags: `latest` and the full Git commit SHA (e.g. `ghcr.io/markof88/gitops-demo/demo-app:2fad36b...`). The SHA tag is what gets used for deployment — it is immutable and traceable back to the exact commit.
+2. **Pushes to GitHub Container Registry** the image is tagged with two tags: `latest` and the full Git commit SHA (e.g. `ghcr.io/markof88/gitops-demo/demo-app:2fad36b...`). The SHA tag is what gets used for deployment. it is immutable and traceable back to the exact commit.
 
-3. **Updates the image tag in Git** — this is the critical step. After pushing the image, CI runs:
+3. **Updates the image tag in Git** this is the critical step. After pushing the image, CI runs:
    ```bash
    kustomize edit set image demo-app=ghcr.io/markof88/gitops-demo/demo-app:<SHA>
    ```
    This updates `apps/demo-app/overlays/dev/kustomization.yaml` with the new tag and commits it back to `main` with the message `deploy: update demo-app to <SHA>`.
 
-4. **CI never touches the cluster** — it only writes to Git. ArgoCD reads from Git. That is the entire handoff.
+4. **CI never touches the cluster** it only writes to Git. ArgoCD reads from Git. That is the entire handoff.
 
 ---
 
-## `apps/` — Kubernetes Manifests (Kustomize)
+## `apps/` Kubernetes Manifests (Kustomize)
 
-**What is Kustomize:** Kustomize is a Kubernetes-native configuration management tool built into `kubectl`. Instead of using templates with variables (like Helm), it works by defining a base set of YAML resources and applying environment-specific patches on top. There are no `{{ variables }}` or conditionals — just plain Kubernetes YAML, layered.
+**What is Kustomize:** Kustomize is a Kubernetes-native configuration management tool built into `kubectl`. Instead of using templates with variables (like Helm), it works by defining a base set of YAML resources and applying environment-specific patches on top. There are no `{{ variables }}` or conditionals. just plain Kubernetes YAML, layered.
 
 ```
 apps/demo-app/
@@ -82,11 +80,11 @@ apps/demo-app/
     prod/         → prod-specific overrides
 ```
 
-### `apps/demo-app/base/` — Shared Resources
+### `apps/demo-app/base/` Shared Resources
 
 This is the single source of truth for how the application is defined. Every environment starts from here.
 
-**`kustomization.yaml`** — the index file. Lists all resources Kustomize should include:
+**`kustomization.yaml`** the index file. Lists all resources Kustomize should include:
 ```yaml
 resources:
 - deployment.yaml
@@ -98,43 +96,43 @@ resources:
 - migration-job.yaml
 ```
 
-**`deployment.yaml`** — the main app deployment. Defines the NGINX container, the two environment variables injected from secrets (`SECRET_MESSAGE`, `TEAM_MESSAGE`), resource requests/limits, and readiness/liveness probes. Annotated with `sync-wave: "4"` — it deploys last, after the database is ready.
+**`deployment.yaml`** the main app deployment. Defines the NGINX container, the two environment variables injected from secrets (`SECRET_MESSAGE`, `TEAM_MESSAGE`), resource requests/limits, and readiness/liveness probes. Annotated with `sync-wave: "4"` . It deploys last, after the database is ready.
 
-**`service.yaml`** — exposes the app as a `LoadBalancer` service on port 80. This is how you access the app from outside the cluster.
+**`service.yaml`** exposes the app as a `LoadBalancer` service on port 80. This is how you access the app from outside the cluster.
 
-**`pdb.yaml`** — PodDisruptionBudget. Tells Kubernetes: during voluntary disruptions (node drain, rolling update), at most 1 pod can be unavailable at a time. Prevents the app from going fully down during deployments when running 2 replicas.
+**`pdb.yaml`** PodDisruptionBudget. Tells Kubernetes: during voluntary disruptions (node drain, rolling update), at most 1 pod can be unavailable at a time. Prevents the app from going fully down during deployments when running 2 replicas.
 
-**`postgres.yaml`** — PostgreSQL deployment + service. Runs `postgres:15-alpine`, reads the superuser password from `postgres-secret`, exposes port 5432 internally. Uses `emptyDir` for storage (data is ephemeral — this is a demo, not a production setup). Annotated with `sync-wave: "1"` — it must be up and healthy before anything else runs.
+**`postgres.yaml`** PostgreSQL deployment + service. Runs `postgres:15-alpine`, reads the superuser password from `postgres-secret`, exposes port 5432 internally. Uses `emptyDir` for storage (data is ephemeral, this is a demo, not a production setup). Annotated with `sync-wave: "1"`. It must be up and healthy before anything else runs.
 
-**`postgres-netpol.yaml`** — NetworkPolicy. Restricts who can talk to the Postgres pod on port 5432. Only two things are allowed ingress:
+**`postgres-netpol.yaml`** NetworkPolicy. Restricts who can talk to the Postgres pod on port 5432. Only two things are allowed ingress:
 - The `demo-app` pods (label `app: demo-app`)
 - The bootstrap and migration jobs (by `job-name` label)
 
 Nobody else can reach Postgres, even within the cluster.
 
-**`db-bootstrap-job.yaml`** — a Kubernetes Job that runs once per sync (wave 2). It connects to Postgres as the superuser and:
+**`db-bootstrap-job.yaml`** a Kubernetes Job that runs once per sync (wave 2). It connects to Postgres as the superuser and:
 1. Creates the application-scoped database user (`demo_app`) if it does not exist, or updates the password if it does
 2. Grants the user connect, schema usage, and create permissions on the `demo` database
 3. Transfers ownership of all existing tables to that user
 
 This means the application never connects to Postgres with superuser credentials. It uses a dedicated user with only the permissions it needs.
 
-**`migration-job.yaml`** — a Kubernetes Job that runs once per sync (wave 3). It connects as the app-scoped user (`demo_app`) and runs SQL migrations idempotently:
+**`migration-job.yaml`** a Kubernetes Job that runs once per sync (wave 3). It connects as the app-scoped user (`demo_app`) and runs SQL migrations idempotently:
 - 001: create `messages` table
 - 002: add `team_message` column
 - 003: seed initial row (only if table is empty)
 - 004: add `deployment_source` column
 - 005: add `demo_version` column
 
-All migrations use `IF NOT EXISTS` or `IF NOT EXISTS` guards — safe to run repeatedly. If a migration was already applied, it is skipped with a notice.
+All migrations use `IF NOT EXISTS` or `IF NOT EXISTS` guards, safe to run repeatedly. If a migration was already applied, it is skipped with a notice.
 
-Both jobs are annotated as ArgoCD `Sync` hooks with `BeforeHookCreation` delete policy — ArgoCD deletes the old job before creating a new one on each sync, so they always run fresh.
+Both jobs are annotated as ArgoCD `Sync` hooks with `BeforeHookCreation` delete policy. ArgoCD deletes the old job before creating a new one on each sync, so they always run fresh.
 
-### `apps/demo-app/overlays/dev/` — Dev Environment Overrides
+### `apps/demo-app/overlays/dev/` Dev Environment Overrides
 
 ArgoCD for dev points at this path: `apps/demo-app/overlays/dev`. Kustomize merges base + overlay to produce the final manifests applied to the cluster.
 
-**`kustomization.yaml`** — the overlay index. It pulls in the base, adds dev-specific secrets, applies patches, and sets the image tag:
+**`kustomization.yaml`** the overlay index. It pulls in the base, adds dev-specific secrets, applies patches, and sets the image tag:
 ```yaml
 resources:
 - ../../base          # pull in everything from base/
@@ -151,17 +149,17 @@ images:
   newTag: 72fdffbc...   # ← CI updates this line on every deploy
 ```
 
-**`replica-patch.yaml`** — patches the base Deployment to set `replicas: 2` for dev. In prod this would be `3`.
+**`replica-patch.yaml`** patches the base Deployment to set `replicas: 2` for dev. In prod this would be `3`.
 
-**`postgres-secret.yaml`** — plaintext Kubernetes Secret containing the Postgres superuser password (`demo-password`). Plaintext is acceptable in dev only — in stage and prod this is replaced with a SealedSecret.
+**`postgres-secret.yaml`** plaintext Kubernetes Secret containing the Postgres superuser password (`demo-password`). Plaintext is acceptable in dev only — in stage and prod this is replaced with a SealedSecret.
 
-**`sealed-secret.yaml`** — encrypted SealedSecret for `demo-secret` (the app messages). Encrypted with the cluster's public key via `kubeseal`. Contains `message` and `team-message` fields sourced from 1Password. Safe to commit — only this specific cluster can decrypt it.
+**`sealed-secret.yaml`** encrypted SealedSecret for `demo-secret` (the app messages). Encrypted with the cluster's public key via `kubeseal`. Contains `message` and `team-message` fields sourced from 1Password. Safe to commit, only this specific cluster can decrypt it.
 
-**`app-db-sealed-secret.yaml`** — encrypted SealedSecret for `app-db-secret` (the DB credentials). Contains `username: demo_app` and `password` sourced from 1Password. Used by both the bootstrap job and the migration job to connect to Postgres.
+**`app-db-sealed-secret.yaml`** encrypted SealedSecret for `app-db-secret` (the DB credentials). Contains `username: demo_app` and `password` sourced from 1Password. Used by both the bootstrap job and the migration job to connect to Postgres.
 
 ---
 
-## `clusters/` — ArgoCD Configuration
+## `clusters/` ArgoCD Configuration
 
 ```
 clusters/dev/
@@ -174,9 +172,9 @@ clusters/dev/
 - Which cluster namespaces it can deploy into (`demo`)
 - Which Kubernetes resource types it is allowed to create (`Deployment`, `Service`, `Job`, `SealedSecret`, `NetworkPolicy`, etc.)
 
-If a resource type is not listed here, ArgoCD will refuse to apply it — even if it is in Git. This is how you prevent ArgoCD from being used to deploy arbitrary cluster-wide resources.
+If a resource type is not listed here, ArgoCD will refuse to apply it, even if it is in Git. This is how you prevent ArgoCD from being used to deploy arbitrary cluster-wide resources.
 
-**`demo-app.yaml`** — defines the `demo-app` ArgoCD Application. It tells ArgoCD:
+**`demo-app.yaml`** defines the `demo-app` ArgoCD Application. It tells ArgoCD:
 - Watch this repo: `github.com/markof88/gitops-demo`
 - Watch this path: `apps/demo-app/overlays/dev`
 - Deploy to this namespace: `demo`
@@ -186,14 +184,14 @@ If a resource type is not listed here, ArgoCD will refuse to apply it — even i
 
 ---
 
-## `bootstrap/` — App of Apps
+## `bootstrap/` App of Apps
 
 ```
 bootstrap/
   root-app.yaml   → the root ArgoCD Application
 ```
 
-**The problem this solves:** `project.yaml` and `demo-app.yaml` in `clusters/dev/` are Kubernetes resources — they need to be applied to the cluster somehow. Without this, any change to the AppProject or the Application definition requires a manual `kubectl apply`. That breaks the GitOps principle.
+**The problem this solves:** `project.yaml` and `demo-app.yaml` in `clusters/dev/` are Kubernetes resources. they need to be applied to the cluster somehow. Without this, any change to the AppProject or the Application definition requires a manual `kubectl apply`. That breaks the GitOps principle.
 
 **The solution:** `root-app.yaml` is an ArgoCD Application that watches `clusters/dev/` in Git and manages `project.yaml` and `demo-app.yaml`. This makes ArgoCD manage its own configuration from Git.
 
@@ -208,7 +206,7 @@ syncPolicy:
     selfHeal: true
 ```
 
-**The bootstrapping step:** `root-app.yaml` itself is the one thing that cannot manage itself — it must be applied manually once:
+**The bootstrapping step:** `root-app.yaml` itself is the one thing that cannot manage itself. it must be applied manually once:
 ```bash
 kubectl apply -f bootstrap/root-app.yaml
 ```
@@ -248,7 +246,7 @@ After that, everything else flows from Git. This is the only `kubectl apply` you
 
 ---
 
-## Architecture Overview (no commands — explain verbally)
+## Architecture Overview
 
 **What is built:**
 
@@ -268,7 +266,7 @@ clusters/dev/
   project.yaml                → AppProject (what ArgoCD is allowed to manage)
   demo-app.yaml               → ArgoCD Application (what to sync and where)
 bootstrap/
-  root-app.yaml               → The App of Apps — bootstraps everything above
+  root-app.yaml               → The App of Apps, bootstraps everything above
 ```
 
 **Sync wave order (every sync runs in this sequence):**
@@ -312,14 +310,14 @@ argocd login localhost:8080 --insecure --username admin \
 
 ---
 
-## 1. Start from scratch — one command deploys the entire stack
+## 1. Start from scratch, one command deploys the entire stack
 
 **What this shows:** The whole infrastructure is in Git. One `kubectl apply` bootstraps
-everything — ArgoCD creates the AppProject, the Application, and syncs the full stack
+everything, ArgoCD creates the AppProject, the Application, and syncs the full stack
 with the correct wave order.
 
 ```bash
-# Clean slate — delete everything
+# Clean slate, delete everything
 kubectl delete application root-app -n argocd --ignore-not-found
 kubectl delete application demo-app -n argocd --ignore-not-found
 kubectl delete namespace demo --ignore-not-found
@@ -362,10 +360,10 @@ kubectl get svc demo-app -n demo
 
 ---
 
-## 2. Seal a secret from 1Password — no plaintext ever touches disk
+## 2. Seal a secret from 1Password. no plaintext ever touches disk
 
 **What this shows:** Secrets are fetched live from 1Password and piped straight into kubeseal.
-The only file written to disk is the encrypted SealedSecret — safe to commit to a public repo.
+The only file written to disk is the encrypted SealedSecret, safe to commit to a public repo.
 
 ```bash
 # Sign in to 1Password
@@ -407,7 +405,7 @@ kubectl get secret demo-secret -n demo -o jsonpath='{.data.message}' | base64 -d
 
 ---
 
-## 3. Inspect the database — what the sync waves actually did
+## 3. Inspect the database, what the sync waves actually did
 
 **What this shows:** The db-bootstrap job (wave 2) created an app-scoped DB user.
 The migration job (wave 3) created the schema and seeded data. Both ran automatically on sync.
@@ -442,14 +440,14 @@ SELECT * FROM messages;   -- app user owns its tables
 
 ---
 
-## 4. Change DB permissions — AppProject update flows through Git
+## 4. Change DB permissions, AppProject update flows through Git
 
 **What this shows:** Previously AppProject changes required manual kubectl apply.
-Now root-app manages it — change project.yaml in Git, push, ArgoCD applies it automatically.
+Now root-app manages it. change project.yaml in Git, push, ArgoCD applies it automatically.
 
 ```bash
 # Example: add a new allowed resource kind to the AppProject
-# Edit clusters/dev/project.yaml — add a new entry under namespaceResourceWhitelist:
+# Edit clusters/dev/project.yaml. add a new entry under namespaceResourceWhitelist:
 #
 #     - group: autoscaling
 #       kind: HorizontalPodAutoscaler
@@ -469,9 +467,9 @@ kubectl get appproject caralegal-dev -n argocd -o jsonpath='{.spec.namespaceReso
 
 ---
 
-## 5. Add a schema migration — sync waves enforce correct order
+## 5. Add a schema migration. sync waves enforce correct order
 
-**What this shows:** Schema changes are code. Add a migration, push — ArgoCD's sync waves
+**What this shows:** Schema changes are code. Add a migration, push. ArgoCD's sync waves
 guarantee: migration runs and completes before the app deployment starts.
 If the migration fails, the app does not deploy.
 
@@ -507,7 +505,7 @@ psql -h localhost -U demo -d demo -c "SELECT * FROM messages;"
 commits the new tag back to Git, ArgoCD detects the tag change and rolls out new pods.
 
 ```bash
-# Change the app (bump to next version — check current first)
+# Change the app (bump to next version, check current first)
 grep "GitOps Demo" app/index.html
 
 sed -i '' 's/GitOps Demo — v[0-9]*/GitOps Demo — v2/' app/index.html
@@ -530,10 +528,10 @@ curl http://$(kubectl get svc demo-app -n demo -o jsonpath='{.status.loadBalance
 
 ---
 
-## 7. Rollback — revert to previous version via Git
+## 7. Rollback -> revert to previous version via Git
 
 **What this shows:** Rollback is a git revert. The previous state is in Git history.
-Revert the commit, push — ArgoCD rolls back automatically. No special rollback commands.
+Revert the commit, push. ArgoCD rolls back automatically. No special rollback commands.
 
 ```bash
 # Show current image tag deployed
