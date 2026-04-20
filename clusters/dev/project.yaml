@@ -32,3 +32,5 @@ spec:
       kind: PodDisruptionBudget
     - group: networking.k8s.io
       kind: NetworkPolicy
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
