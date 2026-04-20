@@ -1,0 +1,62 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: demo-app-migration
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      containers:
+      - name: migrate
+        image: postgres:15-alpine
+        env:
+        - name: PGHOST
+          value: postgres
+        - name: PGDATABASE
+          value: demo
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: app-db-secret
+              key: username
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-db-secret
+              key: password
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for postgres to be ready..."
+          until pg_isready -h $PGHOST -U $PGUSER; do
+            sleep 2
+          done
+
+          echo "001: create messages table..."
+          psql -c "CREATE TABLE IF NOT EXISTS messages (
+            id         SERIAL PRIMARY KEY,
+            message    TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+          );"
+
+          echo "002: add team_message column (backward-compatible)..."
+          psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS team_message TEXT;"
+
+          echo "003: seed initial data if empty..."
+          psql -c "INSERT INTO messages (message, team_message)
+            SELECT 'Hello from GitOps!', 'Deployed by ArgoCD'
+            WHERE NOT EXISTS (SELECT 1 FROM messages LIMIT 1);"
+
+          echo "004: add deployment_source column (backward-compatible)..."
+          psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS deployment_source TEXT DEFAULT 'argocd';"
+
+          echo "005: add demo_version column..."
+          psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS demo_version TEXT DEFAULT 'v1';"
+
+          echo "All migrations completed successfully."
+      restartPolicy: Never

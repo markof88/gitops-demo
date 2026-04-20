@@ -1,0 +1,15 @@
+resources:
+- ../../base
+- sealed-secret.yaml
+- postgres-secret.yaml
+- app-db-sealed-secret.yaml
+
+patches:
+- path: replica-patch.yaml
+
+images:
+- name: demo-app
+  newName: ghcr.io/markof88/gitops-demo/demo-app
+  newTag: 72fdffbcb9c502104d10b0d4dd45e843e98477ba
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization

@@ -1,0 +1,9 @@
+resources:
+  - ../../base
+  # sealed-secret.yaml: add after sealing against the prod cluster key
+  # kubeseal --controller-namespace kube-system --fetch-cert > prod-pub.pem
+  # kubeseal --cert prod-pub.pem --format yaml < secret.yaml > sealed-secret.yaml
+
+patches:
+  - path: replica-patch.yaml
+  - path: resources-patch.yaml

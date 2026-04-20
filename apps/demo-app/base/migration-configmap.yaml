@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: migrations
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-1"
+data:
+  001_create_messages.sql: |
+    -- v1: initial schema
+    CREATE TABLE IF NOT EXISTS messages (
+      id        SERIAL PRIMARY KEY,
+      message   TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+
+  002_add_team_message.sql: |
+    -- v2: backward-compatible addition (nullable column, old code still works)
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS team_message TEXT;
+
+  003_seed_data.sql: |
+    -- seed only if table is empty
+    INSERT INTO messages (message, team_message)
+    SELECT 'Hello from GitOps!', 'Deployed by ArgoCD'
+    WHERE NOT EXISTS (SELECT 1 FROM messages LIMIT 1);
