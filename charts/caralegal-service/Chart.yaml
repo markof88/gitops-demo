@@ -1,0 +1,5 @@
+apiVersion: v2
+name: caralegal-service
+description: Generic Helm chart for Caralegal microservices
+type: application
+version: 0.1.0

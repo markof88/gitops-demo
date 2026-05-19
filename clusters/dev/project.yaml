@@ -10,6 +10,8 @@ spec:
   destinations:
     - server: 'https://kubernetes.default.svc'
       namespace: demo
+    - server: 'https://kubernetes.default.svc'
+      namespace: orgunit-mock
   clusterResourceWhitelist:
     - group: ''
       kind: Namespace

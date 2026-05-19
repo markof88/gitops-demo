@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: caralegal-dev
+  namespace: argocd
+spec:
+  generators:
+  - list:
+      elements:
+      - service: demo-app
+        namespace: demo
+      - service: orgunit-mock
+        namespace: orgunit-mock
+  template:
+    metadata:
+      name: '{{service}}'
+    spec:
+      project: caralegal-dev
+      sources:
+      - repoURL: 'https://github.com/markof88/gitops-demo'
+        targetRevision: HEAD
+        path: charts/caralegal-service
+        helm:
+          valueFiles:
+          - $values/services/{{service}}/values-dev.yaml
+      - repoURL: 'https://github.com/markof88/gitops-demo'
+        targetRevision: HEAD
+        ref: values
+      destination:
+        server: 'https://kubernetes.default.svc'
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true

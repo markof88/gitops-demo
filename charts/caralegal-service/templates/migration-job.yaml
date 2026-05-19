@@ -1,0 +1,41 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "caralegal-service.name" . }}-migration
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      containers:
+      - name: migrate
+        image: {{ .Values.migrations.image }}
+        env:
+        - name: PGHOST
+          value: {{ .Values.migrations.pgHost }}
+        - name: PGDATABASE
+          value: {{ .Values.migrations.pgDatabase }}
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.migrations.appSecretName }}
+              key: username
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.migrations.appSecretName }}
+              key: password
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for postgres..."
+          until pg_isready -h $PGHOST -U $PGUSER; do sleep 2; done
+          {{ .Values.migrations.sql | nindent 10 }}
+          echo "All migrations completed."
+      restartPolicy: Never
+{{- end }}

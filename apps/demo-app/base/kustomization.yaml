@@ -1,8 +1,0 @@
-resources:
-- deployment.yaml
-- service.yaml
-- pdb.yaml
-- postgres.yaml
-- postgres-netpol.yaml
-- db-bootstrap-job.yaml
-- migration-job.yaml

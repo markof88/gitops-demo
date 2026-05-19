@@ -1,3 +1,4 @@
+{{- if .Values.postgres.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -12,7 +13,7 @@ spec:
   - from:
     - podSelector:
         matchLabels:
-          app: demo-app
+          {{- include "caralegal-service.selectorLabels" . | nindent 10 }}
     ports:
     - protocol: TCP
       port: 5432
@@ -22,8 +23,9 @@ spec:
         - key: job-name
           operator: In
           values:
-          - demo-app-db-bootstrap
-          - demo-app-migration
+          - {{ include "caralegal-service.name" . }}-db-bootstrap
+          - {{ include "caralegal-service.name" . }}-migration
     ports:
     - protocol: TCP
       port: 5432
+{{- end }}

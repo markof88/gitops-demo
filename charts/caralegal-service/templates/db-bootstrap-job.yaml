@@ -1,0 +1,61 @@
+{{- if .Values.dbBootstrap.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "caralegal-service.name" . }}-db-bootstrap
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      containers:
+      - name: db-bootstrap
+        image: {{ .Values.dbBootstrap.image }}
+        env:
+        - name: PGHOST
+          value: {{ .Values.dbBootstrap.pgHost }}
+        - name: PGDATABASE
+          value: {{ .Values.dbBootstrap.pgDatabase }}
+        - name: PGUSER
+          value: {{ .Values.postgres.user }}
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.postgres.secretName }}
+              key: password
+        - name: APP_USERNAME
+          value: {{ .Values.dbBootstrap.appUsername }}
+        - name: APP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dbBootstrap.appPasswordSecretName }}
+              key: {{ .Values.dbBootstrap.appPasswordSecretKey }}
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for postgres..."
+          until pg_isready -h $PGHOST -U $PGUSER; do sleep 2; done
+
+          echo "Creating app-scoped user '$APP_USERNAME'..."
+          psql -c "DO \$\$
+          BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '$APP_USERNAME') THEN
+              CREATE USER \"$APP_USERNAME\" WITH PASSWORD '$APP_PASSWORD';
+            ELSE
+              ALTER USER \"$APP_USERNAME\" WITH PASSWORD '$APP_PASSWORD';
+            END IF;
+          END \$\$;"
+
+          psql -c "GRANT CONNECT ON DATABASE $PGDATABASE TO $APP_USERNAME;"
+          psql -c "GRANT USAGE ON SCHEMA public TO $APP_USERNAME;"
+          psql -c "GRANT CREATE ON SCHEMA public TO $APP_USERNAME;"
+          psql -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO $APP_USERNAME;"
+          psql -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO $APP_USERNAME;"
+
+          echo "Bootstrap complete."
+      restartPolicy: Never
+{{- end }}

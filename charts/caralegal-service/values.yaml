@@ -1,0 +1,75 @@
+# Default values for caralegal-service
+# Override these in services/<name>/values-dev.yaml
+
+replicaCount: 2
+
+image:
+  repository: ""
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 80
+
+# Static environment variables
+# env:
+#   APP_PORT: "8080"
+#   APP_DB_ENDPOINT: "my-service-db.internal.caralegal.eu"
+
+env: {}
+
+# Environment variables sourced from Kubernetes Secrets
+# envFromSecrets:
+#   - envName: AUTH_JWT_PUBLIC_KEY
+#     secretName: my-service-secrets
+#     secretKey: auth_jwt_public_key
+
+envFromSecrets: []
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    memory: "256Mi"
+
+probes:
+  enabled: true
+  path: /
+  port: 80
+
+pdb:
+  enabled: true
+  maxUnavailable: 1
+
+# Postgres sidecar - disable for stateless services
+postgres:
+  enabled: false
+  image: postgres:15-alpine
+  database: ""
+  user: ""
+  secretName: ""
+
+# Database bootstrap job (wave 2), creates app-scoped DB user
+dbBootstrap:
+  enabled: false
+  image: postgres:15-alpine
+  pgHost: postgres
+  pgDatabase: ""
+  superuserSecretName: ""
+  appUsername: ""
+  appPasswordSecretName: ""
+  appPasswordSecretKey: ""
+
+migrations:
+  enabled: false
+  image: postgres:15-alpine
+  pgHost: postgres
+  pgDatabase: ""
+  appSecretName: ""
+  sql: ""
+
+# Raw Kubernetes objects appended to the manifest (use for SealedSecrets)
+extraObjects: []

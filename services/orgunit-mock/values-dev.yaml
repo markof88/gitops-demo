@@ -1,0 +1,67 @@
+# orgunit-mock — represents a stateless Caralegal microservice
+# Compare this to cara-ci.override.json in a real service repo:
+#   extraTerraformOutputEnvTuples → env (stable DNS, no Terraform injection needed)
+#   extraSecretEnvKeys            → envFromSecrets
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/markof88/gitops-demo/demo-app
+  tag: latest
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 80
+
+# Previously injected via --terraform-output-env-tuples at deploy time.
+# Now static DNS names — Terraform manages the DNS record, not the manifest.
+env:
+  APP_PORT: "8080"
+  APP_DB_ENDPOINT: "orgunit-db.internal.caralegal.eu"
+  APP_KAFKA_CONNECT_ADDRESS: "kafka.internal.caralegal.eu"
+
+# Previously injected from Bitbucket pipeline variables.
+# Now sourced from a Kubernetes Secret managed in Git.
+envFromSecrets:
+  - envName: AUTH_JWT_PUBLIC_KEY
+    secretName: orgunit-mock-secrets
+    secretKey: auth_jwt_public_key
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
+
+probes:
+  enabled: true
+  path: /
+  port: 80
+
+pdb:
+  enabled: true
+  maxUnavailable: 1
+
+# No database — stateless service
+postgres:
+  enabled: false
+
+dbBootstrap:
+  enabled: false
+
+migrations:
+  enabled: false
+
+extraObjects:
+  # In production this would be a SealedSecret backed by Vault/ESO.
+  # Using a plaintext secret here for demo purposes only.
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: orgunit-mock-secrets
+      namespace: orgunit-mock
+    type: Opaque
+    stringData:
+      auth_jwt_public_key: "mock-jwt-public-key-value"

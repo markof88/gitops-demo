@@ -1,7 +1,10 @@
+{{- if .Values.postgres.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres
+  labels:
+    {{- include "caralegal-service.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
@@ -16,30 +19,30 @@ spec:
     spec:
       containers:
       - name: postgres
-        image: postgres:15-alpine
+        image: {{ .Values.postgres.image }}
         env:
         - name: POSTGRES_DB
-          value: demo
+          value: {{ .Values.postgres.database }}
         - name: POSTGRES_USER
-          value: demo
+          value: {{ .Values.postgres.user }}
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: postgres-secret
+              name: {{ .Values.postgres.secretName }}
               key: password
         ports:
         - containerPort: 5432
         readinessProbe:
           exec:
-            command: [pg_isready, -U, demo]
+            command: ["pg_isready", "-U", {{ .Values.postgres.user | quote }}]
           initialDelaySeconds: 5
           periodSeconds: 5
         resources:
           requests:
-            cpu: 50m
-            memory: 128Mi
+            cpu: "50m"
+            memory: "128Mi"
           limits:
-            memory: 256Mi
+            memory: "256Mi"
         volumeMounts:
         - name: data
           mountPath: /var/lib/postgresql/data
@@ -51,9 +54,12 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   selector:
     app: postgres
   ports:
   - port: 5432
     targetPort: 5432
+{{- end }}

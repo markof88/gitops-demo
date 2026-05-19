@@ -1,0 +1,121 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/markof88/gitops-demo/demo-app
+  tag: bc5aa65b375613c6ba5fce9c2a4bf0b8d8842bd7
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 80
+
+envFromSecrets:
+  - envName: SECRET_MESSAGE
+    secretName: demo-secret
+    secretKey: message
+  - envName: TEAM_MESSAGE
+    secretName: demo-secret
+    secretKey: team-message
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 128Mi
+
+probes:
+  enabled: true
+  path: /
+  port: 80
+
+pdb:
+  enabled: true
+  maxUnavailable: 1
+
+postgres:
+  enabled: true
+  image: postgres:15-alpine
+  database: demo
+  user: demo
+  secretName: postgres-secret
+
+dbBootstrap:
+  enabled: true
+  image: postgres:15-alpine
+  pgHost: postgres
+  pgDatabase: demo
+  appUsername: demo_app
+  appPasswordSecretName: app-db-secret
+  appPasswordSecretKey: password
+
+migrations:
+  enabled: true
+  image: postgres:15-alpine
+  pgHost: postgres
+  pgDatabase: demo
+  appSecretName: app-db-secret
+  sql: |
+    echo "001: create messages table..."
+    psql -c "CREATE TABLE IF NOT EXISTS messages (
+      id         SERIAL PRIMARY KEY,
+      message    TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    );"
+
+    echo "002: add team_message column..."
+    psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS team_message TEXT;"
+
+    echo "003: seed initial data if empty..."
+    psql -c "INSERT INTO messages (message, team_message)
+      SELECT 'Hello from GitOps!', 'Deployed by ArgoCD'
+      WHERE NOT EXISTS (SELECT 1 FROM messages LIMIT 1);"
+
+    echo "004: add deployment_source column..."
+    psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS deployment_source TEXT DEFAULT 'argocd';"
+
+    echo "005: add demo_version column..."
+    psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS demo_version TEXT DEFAULT 'v1';"
+
+    echo "006: add presented_at column..."
+    psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS presented_at TIMESTAMP DEFAULT NOW();"
+
+# Raw Kubernetes objects — secrets and SealedSecrets for this service
+extraObjects:
+  # dev only — plaintext. In prod this would be a SealedSecret.
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: postgres-secret
+      namespace: demo
+    type: Opaque
+    stringData:
+      password: demo-password
+
+  - apiVersion: bitnami.com/v1alpha1
+    kind: SealedSecret
+    metadata:
+      name: demo-secret
+      namespace: demo
+    spec:
+      encryptedData:
+        message: AgAUdGxdNWUEMJTwwisYVOWr3abc5eFenKLfKRb3umk76yx6qAaIKAzYz9thrpgtRxuwZ8Bw3qpKuyoI10RNOFZmKGYMNbmOW1gxKiNEOXzfsZldPBzLvUdTbBaoeOIOuBXwspbY6wEzABg5EghJqY9qbUxYZRVFUKwNWC4FPecDqCmoqc6O80JOIPx5NuNtag0NJiPslR3nFjtCYICcA9u1V9KML+el4WaN4cVvsNHTWUoPVNUg7XzWCZQNfulJ+bqhR87i1qPoanapDZcmr1Y4iCDmys4+YQTHhloZUhP0lh6/K9omCQLElUIBHnQ6OorA0L2ZRuMWNveXDgNFbKiEsTE3h/Fmd3XHL5ili23+hNIIkHtT4/YaXp8UTbzngCv6MuB1c/hy/3V4aWUoX1PwwGRmBi6zbGV5KqwY3d68zylh+ef9LxiiTuUWayKK+hdDNugr9dVdV/c0ky5fyKiFmLgE936CPQFMnB17Qhcu8+79lPC5q8A0wwVVU6BYRGjxNT949oxRVSHnCYczzKQPfsteYr4DgbaD5W9/vmHkSmKmFLqzOMfZZBanA4zmEEe4I+8HkHimvVBDI3KOJaPtdgfozWsC8N++PbRy1Wkq5f9JYuB3dPBfn2xwzRQ+jXW/iuRlXY5o7uaZ6gbGxDlNI2tA04EeKG009jklzI+BwJhtu0MXTPI4j/EhXFGJskfQjNz7cHtCxX833t/qxUO0lC4fpw==
+        team-message: AgB0Q6l7qURqcEhyexPsPxjyLMmFXxEaErJu9yiBZxFGVSMyUPz3GO8ppPoIxVqNNDMEtDwKkf4n3+/iF4Q5mpG8c4clGNzKta9z0X9qjvyGLV1Dk6iDzMWP/jN76LwjVp0PNAjLA9p6MGAt/rvzSuVpcRrHW22JGiIW/brAu/Tfv2ue6Lak4ki7gUNZZXqL+GM0HjL8i8X/98p3CPBRQtR3XF1fB3BWmiQhUzZMhVbMD4YmdKf/EtxkAXpVGKV/TPqnNL1uexHtK8LnDI3n1zfrWBxKHPtocAxhxR7iOuMyghQF8q0Rx/T2GQTWR3T1KBxZihmg3R89aDT6QJOfK4VYbFDkNCZqXvhy7ZwLgjlhBxxtc1noEqNNOOVmcHnY9Wr2z9NnFThoZ9i4lA5fAwuD8ELJDz4p9iWdCaMAEn1tcLo4ZHnUqho5MtKwoGBVV6GADEaqX5wTsXL/mghEFDVmsKvi/50VPsOL0d1mK2RtN/ye16TaTVGoFKZE20BLFNxNuYrxmuejs7qOmCWQca3zsyUj7utyf0ooq7/WLCy+rgICscipPCj9RJw03Jylysstiz4DDbMaofIElU6rH2k29u4j2amiBq8bmQz89HDDynQI8TljzmODI30PYtdjOBlt0kfqGKCxQSvraKSB4jZRyAn1ekVvjdGFd5FfLGQsLqrk4HgMJfg+P3rsr+lzs+mh0Fz7DCpZRwKZOoUTn1TDFQiAbpg=
+      template:
+        metadata:
+          name: demo-secret
+          namespace: demo
+
+  - apiVersion: bitnami.com/v1alpha1
+    kind: SealedSecret
+    metadata:
+      name: app-db-secret
+      namespace: demo
+    spec:
+      encryptedData:
+        password: AgBp2sTuO5puQc0w1e4qwS2i5CmTIqL4h+wD4Q6e1zQkp5w6smx5+skh6LyCdg2P5sjE/SXkv164yE+2blkHbU3GFTm4j0DY6/iFi/IcpgN5mtiD362p5mRC7z8lcfqreQay2bz/OWJupwPWyxyRh02hWliia6hBmm9yc7ZRQXRBSQZ27NGy9TEc1j1xWpSS7r6qCvoWKmLGxLjO78M6jT72J/4p4FZjzYHhyzcwumdndw6hp/FZUpYmAAhXS9VhCZ5bJKeWqNAh91l/CnlZltjXDiECaWPqcftLYl4GAifVOuxAfZ/6+1l8mk9wIUELm94d2Zy1hqcZMYV+2mXfE7fRZqtQkW/3ZfKnfqjjW16VijYIpLTqWK5SGIch0lpNuE3X3H5sLeANEzJEOfjCI1HDNACZ+OABzTYJ2PnLxBbQP6gn0vQTMXu7XXcGxl3wPR1lWlkNZQYzir/ex+FxAfsQjqBI7fwKDHAq7BRdmdzKnuRLzcsJREtCKneNegbKQb4IOoWKcbe8JMT8LITGeMIsQnqiMpzRfSNEyrApNcTCxvUOyet5Z1d27er2ZsyyA7x9EjM8bU1NSi4yJ7KXvSQrU4kdQAEjU++FizG5xTXiDo0LBWg1GXzXM+6a7Gb6H03fpQwAoPg84Z1ZQMfDTquEiUUH/yyYlOBGrJRREmc+6ggVkvmpGMHnRvA6xrWWUKtsbwW4Q8fcAX9mHpJ5H0gJ
+        username: AgAzR0U/d/C7v4LwZW4yhhTkHolvVWV9F/hCncmNK3ZDDNmsQmje6lLIvRYNUCX5GaFVPUxa8bserGorCWnJTkIbhW39O81a3CYwrZc0mMlJo/S5uhPSI205DdRZArdi8jtEs6nIMHI3Y9LwksY/OoLuM4XdXzMrw+QbKYzssbjQ74oY89Leu6avUdXGkK0jIZTVUDFnII9MZzQ7nAx6Wm7ki5Nyz1eBRypooX2ecJlJDyVCCOZSjwc8osjZdb6RdISGHn2xho6RirCbqxJkmr5qwylSuIVNBeakTSZ0b1gCpvPoqBABkH0WpdqiyEmHTvsShTPXfoKpjbxUoFWY6FwQRnr4A2dBA8B8gSNCFeAbB1uJ7YXqdCsVmfX9CGLtccaeMFZCA0Z7dPhnYcm/CP+XxFH4ideuzvx4KyUbso20EYzkR04N1ucVXUZT3ffwcJQRyZt6/85SHxpvb6eIyDqyRzZeH0J83RyQbf42tRgMreYWvKiWK0Mr9iTROzdlgCtEcOMXj3sLom2npD7KE6s9qxwbjMYNIzvcQ8SY9CvwCtK5ngW7bl68AhtU/djbkOZFmYklqT6f3X6mHOXW7iaN/tJxbgAALR/a8ski2ZHNPInQszcm+2RNv0xfNy2ZfxXo3Fj+WTT5iklIQ/Bj9dXPbNVl+DOMFHdNAxnE6wUbACuTN9jhaKGCxQSvraKSB4jZRyAn1ekVvjdGFd5FfLGQsLqrk4HgMJfg+P3rsr+lzs+mh0Fz7DCpZRwKZOoUTn1TDFQiAbpg=
+      template:
+        metadata:
+          name: app-db-secret
+          namespace: demo
