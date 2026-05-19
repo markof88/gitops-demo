@@ -41,21 +41,14 @@ jobs:
             ghcr.io/${{ github.repository }}/demo-app:${{ github.sha }}
             ghcr.io/${{ github.repository }}/demo-app:latest
 
-      - name: Install kustomize
-        run: |
-          curl -sLO "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.1/kustomize_v5.4.1_linux_amd64.tar.gz"
-          tar -xzf kustomize_v5.4.1_linux_amd64.tar.gz
-          sudo mv kustomize /usr/local/bin/
-
       - name: Update image tag
         run: |
-          cd apps/demo-app/overlays/dev
-          kustomize edit set image demo-app=ghcr.io/${{ github.repository }}/demo-app:${{ github.sha }}
+          sed -i "s|tag:.*|tag: ${{ github.sha }}|" services/demo-app/values-dev.yaml
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add apps/demo-app/overlays/dev/kustomization.yaml
+          git add services/demo-app/values-dev.yaml
           git commit -m "deploy: update demo-app to ${{ github.sha }}"
           git push
