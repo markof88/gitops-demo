@@ -37,7 +37,7 @@ spec:
           {{- end }}
           {{- end }}
           resources:
-            {{- toYaml .Values.resources | nindent 10 }}
+            {{- toYaml .Values.resources | nindent 12 }}
           {{- if .Values.probes.enabled }}
           readinessProbe:
             httpGet:
