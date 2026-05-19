@@ -25,6 +25,9 @@ spec:
           - $values/services/{{service}}/values-dev.yaml
       - repoURL: 'https://github.com/markof88/gitops-demo'
         targetRevision: HEAD
+        path: services/{{service}}/secrets
+      - repoURL: 'https://github.com/markof88/gitops-demo'
+        targetRevision: HEAD
         ref: values
       destination:
         server: 'https://kubernetes.default.svc'
