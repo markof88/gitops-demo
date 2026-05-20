@@ -80,6 +80,9 @@ migrations:
     echo "006: add presented_at column..."
     psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS presented_at TIMESTAMP DEFAULT NOW();"
 
+    echo "007: add demo_notes column..."
+    psql -c "ALTER TABLE messages ADD COLUMN IF NOT EXISTS demo_notes TEXT DEFAULT 'live migration demo';"
+
 # Raw Kubernetes objects managed by Helm (simple secrets only)
 # SealedSecrets are in services/demo-app/secrets/ — applied as raw YAML, not through Helm
 extraObjects:
