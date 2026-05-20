@@ -2,7 +2,7 @@ replicaCount: 2
 
 image:
   repository: ghcr.io/markof88/gitops-demo/demo-app
-  tag: ac97cc6044c1f8171aa06829455949d1865a3df7
+  tag: b9a4962a8be78dba02beec06f0200e66d11a71c6
 
 service:
   type: LoadBalancer
